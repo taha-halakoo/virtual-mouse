@@ -69,7 +69,9 @@ class UIView(ttk.Window):
         notebook.add(tab_mode, text="Control Scheme")
         
         self.control_mode_var = tk.StringVar()
-        ttk.Radiobutton(tab_mode, text=" One-Handed (Right Hand Only)", variable=self.control_mode_var, 
+        ttk.Radiobutton(tab_mode, text=" Face & Eyes (Omni-Sense)", variable=self.control_mode_var, 
+                        value="face_and_eyes", bootstyle="info", command=self.update_control_mode).pack(anchor="w", pady=5)
+        ttk.Radiobutton(tab_mode, text=" One-Handed (Right Hand)", variable=self.control_mode_var, 
                         value="one_handed", bootstyle="info", command=self.update_control_mode).pack(anchor="w", pady=5)
         ttk.Radiobutton(tab_mode, text=" Two-Handed (Pro Split)", variable=self.control_mode_var, 
                         value="two_handed", bootstyle="info", command=self.update_control_mode).pack(anchor="w", pady=5)
@@ -174,11 +176,19 @@ class UIView(ttk.Window):
     def set_initial_settings(self, config):
         self.sensitivity_var.set(config['mouse']['pointer_sensitivity'])
         self.smoothening_var.set(config['mouse']['smoothening'])
-        self.control_mode_var.set(config['general'].get('control_mode', 'two_handed'))
+        self.control_mode_var.set(config['general'].get('control_mode', 'face_and_eyes'))
 
     def show_help(self):
         mode = self.control_mode_var.get()
-        if mode == "one_handed":
+        if mode == "face_and_eyes":
+            guide = (
+                "=== OMNI-SENSE GESTURES (FACE & EYES) ===\n\n"
+                "• Pointer: Move your NOSE to aim.\n"
+                "• L-Click: Wink LEFT eye.\n"
+                "• R-Click: Wink RIGHT eye.\n"
+                "• Drag & Drop: Open MOUTH (bite to hold, close to release).\n"
+            )
+        elif mode == "one_handed":
             guide = (
                 "=== ONE-HANDED PRO GESTURES ===\n\n"
                 "Right Hand Only:\n"

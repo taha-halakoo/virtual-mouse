@@ -1,21 +1,23 @@
-# Virtual Mouse v3.0 - Pro Studio Edition
+# Virtual Mouse v5.1 - "Omni-Sense"
 
-The ultimate, premium-grade webcam mouse controller. Built for zero-jitter precision, deep OS integration, and a sleek, professional user experience.
+The absolute cutting-edge in webcam mouse control. This version introduces multi-modal biometrics (Face, Eyes, Hands) using the modern MediaPipe Tasks API.
 
-## The Pro Upgrades (v3.0)
+## The Omni-Sense Upgrades (v5.1)
 
-*   **True One-Euro Filter**: Replaced basic smoothing with an advanced mathematical filter (used in AR/VR). Zero jitter when stationary, zero lag when moving fast.
-*   **System Tray Integration**: Runs cleanly in the background. Minimize it to the Windows System Tray to keep your taskbar clean.
-*   **Global Hotkey Support**: Press `Ctrl+Shift+M` from *anywhere* in your OS to instantly pause or resume tracking.
-*   **Modern UI**: Rebuilt the interface using `ttkbootstrap` for a stunning, native "Cyborg" dark theme.
-*   **Advanced OS Gestures**:
-    *   **Volume Control**: Pinch (Thumb + Pinky) and move up/down to adjust system volume.
-    *   **Desktop Switcher**: Swipe your Right Hand left or right to switch virtual desktops instantly.
+*   **Zero-Latency Pipeline**: Completely rewrote the threading model. The camera, AI inference, and mouse control now run on entirely separate, asynchronous queues. This eliminates the "lag" caused by Python's Global Interpreter Lock (GIL). It feels instant.
+*   **Modern AI Models**: Updated to use the latest, highly optimized MediaPipe `FaceLandmarker` and `HandLandmarker` Tasks API.
+*   **Face & Eye Tracking**:
+    *   **Nose Pointer**: Use the tip of your nose for ultra-stable, fatigue-free pointing. (We amplify the movement so you don't have to turn your head far).
+    *   **Eye Blinks**: Wink your Left Eye to Left Click. Wink your Right Eye to Right Click.
+    *   **Facial Drag**: Open your mouth slightly (like "biting" the screen) to start a drag. Close to drop.
 
 ## Setup
 
 1.  **Python 3.7+**
-2.  **Download Model**: [hand_landmarker.task](https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/hand_landmarker.task) must be in the `virtual-mouse` folder.
+2.  **Download Models**: You need **TWO** model files for this version.
+    *   [hand_landmarker.task](https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/hand_landmarker.task)
+    *   [face_landmarker.task](https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task)
+    *   Place BOTH `.task` files inside the `virtual-mouse` folder.
 3.  **Install Requirements**:
     ```bash
     pip install -r requirements.txt
@@ -23,16 +25,19 @@ The ultimate, premium-grade webcam mouse controller. Built for zero-jitter preci
 
 ## Control Manual
 
-**Right Hand (The Pointer / Scroller):**
-*   **Move**: Point with your INDEX finger.
-*   **Scroll**: (In Scroll Mode) Move hand Up/Down.
-*   **Switch Desktop**: Swipe hand quickly Left or Right.
+Open the app and select your mode:
 
-**Left Hand (The Commander):**
-*   **L-Click**: Pinch THUMB & INDEX.
-*   **R-Click**: Pinch THUMB & MIDDLE.
-*   **Drag**: Hold THUMB & INDEX pinch.
-*   **Mode Swap**: Show 'V' Sign (Index+Middle up).
-*   **Volume**: Pinch THUMB & PINKY and move hand Up/Down.
+**1. Face & Eyes (Omni-Sense)**
+*   Aim: Move Nose
+*   L-Click: Wink Left Eye
+*   R-Click: Wink Right Eye
+*   Drag: Open Mouth
 
-*(Note: In One-Handed mode, all these gestures are performed with the Right Hand).*
+**2. One-Handed Pro**
+*   Move: Point Index Finger
+*   Click: Pinch Thumb + Index
+*   Scroll: Hold 'V' sign, move hand Up/Down
+
+**3. Two-Handed Pro**
+*   Right Hand: Point to move. Swipe Left/Right to change Desktops.
+*   Left Hand: Pinch to Click. Hold 'V' to Scroll. Pinch Thumb+Pinky to change Volume.
