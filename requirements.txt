@@ -2,3 +2,6 @@ opencv-python
 mediapipe
 pyautogui
 Pillow
+ttkbootstrap
+pystray
+keyboard

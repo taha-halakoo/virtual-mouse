@@ -4,12 +4,11 @@ from collections import deque
 
 class GestureRecognizer:
     """
-    ULTIMATE PRECISION Gesture Recognizer with One-Handed & Two-Handed support.
+    ULTIMATE PRECISION Gesture Recognizer with OS-level integrations.
     """
     MODE_MOVING = "Moving"
     MODE_SCROLLING = "Scrolling"
     
-    # Landmark IDs
     WRIST = 0
     THUMB_TIP = 4
     INDEX_FINGER_TIP = 8
@@ -22,21 +21,19 @@ class GestureRecognizer:
 
     def __init__(self, click_pinch_distance=0.15, handedness_swap=True, control_mode="two_handed", **kwargs):
         self.mode = self.MODE_MOVING
-        self.control_mode = control_mode # "one_handed" or "two_handed"
+        self.control_mode = control_mode 
         self.detection_result = None
         self.frame_shape = None
         self.handedness_swap = handedness_swap
         
-        # State Tracking
-        self.pinching = False # Unified pinch state
+        self.pinching = False
         self.last_action_time = 0
         self.action_cooldown = 0.4 
-        
-        # Relative Pinch Threshold
         self.CLICK_THRESHOLD_REL = click_pinch_distance 
-        
-        # Mode Toggle Buffer
         self.mode_history = deque(maxlen=8)
+        
+        # Swipe tracking
+        self.right_hand_x_history = deque(maxlen=10)
 
     def update_result(self, detection_result, frame_shape):
         self.detection_result = detection_result
@@ -64,13 +61,11 @@ class GestureRecognizer:
     def _get_precise_fingers(self, hand_landmarks):
         if not hand_landmarks: return [0, 0, 0, 0, 0]
         fingers = []
-        # Thumb
         thumb_dist_tip = math.hypot(hand_landmarks[self.THUMB_TIP].x - hand_landmarks[self.PINKY_MCP].x, 
                                    hand_landmarks[self.THUMB_TIP].y - hand_landmarks[self.PINKY_MCP].y)
         thumb_dist_base = math.hypot(hand_landmarks[self.THUMB_TIP - 2].x - hand_landmarks[self.PINKY_MCP].x, 
                                     hand_landmarks[self.THUMB_TIP - 2].y - hand_landmarks[self.PINKY_MCP].y)
         fingers.append(1 if thumb_dist_tip > thumb_dist_base else 0)
-        # Other 4
         for tip_id in [8, 12, 16, 20]:
             is_raised = (hand_landmarks[tip_id].y < hand_landmarks[tip_id - 1].y < hand_landmarks[tip_id - 2].y)
             fingers.append(1 if is_raised else 0)
@@ -87,6 +82,30 @@ class GestureRecognizer:
         if self.control_mode == "one_handed":
             return self._recognize_one_handed()
         return self._recognize_two_handed()
+        
+    def _detect_swipe(self, right_hand):
+        # Only swipe if all fingers are open (a "stop" hand)
+        fingers = self._get_precise_fingers(right_hand)
+        if fingers == [1, 1, 1, 1, 1]:
+            h, w, _ = self.frame_shape
+            wrist_x = int(right_hand[self.WRIST].x * w)
+            self.right_hand_x_history.append(wrist_x)
+            
+            if len(self.right_hand_x_history) == self.right_hand_x_history.maxlen:
+                start_x = self.right_hand_x_history[0]
+                end_x = self.right_hand_x_history[-1]
+                delta_x = end_x - start_x
+                
+                # Threshold for a fast swipe
+                if delta_x > 150: # Swipe Right (Mirror considered, might need adjusting)
+                    self.right_hand_x_history.clear()
+                    return 'desktop_left'
+                elif delta_x < -150: # Swipe Left
+                    self.right_hand_x_history.clear()
+                    return 'desktop_right'
+        else:
+            self.right_hand_x_history.clear()
+        return None
 
     def _recognize_two_handed(self):
         actions = []
@@ -96,7 +115,14 @@ class GestureRecognizer:
 
         if right_hand:
             h, w, _ = self.frame_shape
-            if self.mode == self.MODE_SCROLLING:
+            
+            # Check Desktop Swipe
+            swipe_action = self._detect_swipe(right_hand)
+            if swipe_action and cooldown_ok:
+                actions.append((swipe_action, None))
+                self.last_action_time = current_time
+            
+            if self.mode == self.SCROLLING:
                 wrist_y = int(right_hand[self.WRIST].y * h)
                 if not hasattr(self, 'last_wrist_y'): self.last_wrist_y = wrist_y
                 delta_y = self.last_wrist_y - wrist_y
@@ -110,7 +136,6 @@ class GestureRecognizer:
 
         if left_hand:
             left_fingers = self._get_precise_fingers(left_hand)
-            # Mode Toggle: V sign
             v_sign = (left_fingers == [0, 1, 1, 0, 0])
             self.mode_history.append(v_sign)
             if len(self.mode_history) == self.mode_history.maxlen and all(self.mode_history) and cooldown_ok:
@@ -118,6 +143,23 @@ class GestureRecognizer:
                 actions.append(('set_mode', self.mode))
                 self.last_action_time = current_time
                 self.mode_history.clear()
+
+            # Volume Control: Pinky + Thumb pinch while moving up/down
+            vol_dist = self._get_rel_dist(left_hand, self.THUMB_TIP, self.PINKY_TIP)
+            if vol_dist < 0.4:
+                h, w, _ = self.frame_shape
+                wrist_y = int(left_hand[self.WRIST].y * h)
+                if not hasattr(self, 'last_vol_y'): self.last_vol_y = wrist_y
+                delta_y = self.last_vol_y - wrist_y
+                if delta_y > 20:
+                    actions.append(('volume_up', None))
+                    self.last_vol_y = wrist_y
+                elif delta_y < -20:
+                    actions.append(('volume_down', None))
+                    self.last_vol_y = wrist_y
+            else:
+                 if hasattr(self, 'last_vol_y'): del self.last_vol_y
+
 
             if self.mode == self.MODE_MOVING:
                 lp_dist = self._get_rel_dist(left_hand, self.THUMB_TIP, self.INDEX_FINGER_TIP)
@@ -148,7 +190,7 @@ class GestureRecognizer:
 
     def _recognize_one_handed(self):
         actions = []
-        _, right_hand = self._get_hands() # Use right hand for everything in one-handed
+        _, right_hand = self._get_hands() 
         current_time = time.time()
         cooldown_ok = current_time - self.last_action_time > self.action_cooldown
 
@@ -156,7 +198,12 @@ class GestureRecognizer:
             h, w, _ = self.frame_shape
             fingers = self._get_precise_fingers(right_hand)
             
-            # 1. Mode Toggle: V Sign
+            # Check Desktop Swipe
+            swipe_action = self._detect_swipe(right_hand)
+            if swipe_action and cooldown_ok:
+                actions.append((swipe_action, None))
+                self.last_action_time = current_time
+
             v_sign = (fingers == [0, 1, 1, 0, 0])
             self.mode_history.append(v_sign)
             if len(self.mode_history) == self.mode_history.maxlen and all(self.mode_history) and cooldown_ok:
@@ -165,7 +212,21 @@ class GestureRecognizer:
                 self.last_action_time = current_time
                 self.mode_history.clear()
 
-            # 2. Movement / Scrolling
+            # Volume Control
+            vol_dist = self._get_rel_dist(right_hand, self.THUMB_TIP, self.PINKY_TIP)
+            if vol_dist < 0.4 and self.mode == self.MODE_SCROLLING:
+                wrist_y = int(right_hand[self.WRIST].y * h)
+                if not hasattr(self, 'last_vol_y'): self.last_vol_y = wrist_y
+                delta_y = self.last_vol_y - wrist_y
+                if delta_y > 20:
+                    actions.append(('volume_up', None))
+                    self.last_vol_y = wrist_y
+                elif delta_y < -20:
+                    actions.append(('volume_down', None))
+                    self.last_vol_y = wrist_y
+            else:
+                 if hasattr(self, 'last_vol_y'): del self.last_vol_y
+
             if self.mode == self.MODE_SCROLLING:
                 wrist_y = int(right_hand[self.WRIST].y * h)
                 if not hasattr(self, 'last_wrist_y'): self.last_wrist_y = wrist_y
@@ -178,7 +239,6 @@ class GestureRecognizer:
                 index_tip = right_hand[self.INDEX_FINGER_TIP]
                 actions.append(('move', (int(index_tip.x * w), int(index_tip.y * h))))
 
-            # 3. Actions: Pinch
             lp_dist = self._get_rel_dist(right_hand, self.THUMB_TIP, self.INDEX_FINGER_TIP)
             rp_dist = self._get_rel_dist(right_hand, self.THUMB_TIP, self.MIDDLE_FINGER_TIP)
             trigger_thresh = 0.4

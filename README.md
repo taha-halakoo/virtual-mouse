@@ -1,15 +1,16 @@
-# Virtual Mouse v2.1 - Professional Edition
+# Virtual Mouse v3.0 - Pro Studio Edition
 
-A high-performance, two-handed webcam mouse controller with adaptive smoothing, mirroring fix, and simplified gestures.
+The ultimate, premium-grade webcam mouse controller. Built for zero-jitter precision, deep OS integration, and a sleek, professional user experience.
 
-## Professional Features (v2.1)
+## The Pro Upgrades (v3.0)
 
-*   **Mirroring Fix**: Cursor movement now correctly matches your "real" left/right movements in the webcam selfie-view.
-*   **Super-Easy Gestures**: Uses clear finger-count logic for maximum reliability.
-*   **Adaptive Smoothing**: Rock-solid precision when still, instant response when moving fast.
-*   **Two-Handed Mastery**:
-    *   **Right Hand**: Precision pointer.
-    *   **Left Hand**: Action commander (Click, Drag, Scroll).
+*   **True One-Euro Filter**: Replaced basic smoothing with an advanced mathematical filter (used in AR/VR). Zero jitter when stationary, zero lag when moving fast.
+*   **System Tray Integration**: Runs cleanly in the background. Minimize it to the Windows System Tray to keep your taskbar clean.
+*   **Global Hotkey Support**: Press `Ctrl+Shift+M` from *anywhere* in your OS to instantly pause or resume tracking.
+*   **Modern UI**: Rebuilt the interface using `ttkbootstrap` for a stunning, native "Cyborg" dark theme.
+*   **Advanced OS Gestures**:
+    *   **Volume Control**: Pinch (Thumb + Pinky) and move up/down to adjust system volume.
+    *   **Desktop Switcher**: Swipe your Right Hand left or right to switch virtual desktops instantly.
 
 ## Setup
 
@@ -20,17 +21,18 @@ A high-performance, two-handed webcam mouse controller with adaptive smoothing, 
     pip install -r requirements.txt
     ```
 
-## Control Manual (Super-Easy Mode)
+## Control Manual
 
-### Right Hand (The Pointer)
-*   **Move Cursor**: Simply point with your **Index Finger**. (Keep other fingers down for best results).
-*   **Scroll**: If **Scrolling Mode** is active, move your hand up/down.
+**Right Hand (The Pointer / Scroller):**
+*   **Move**: Point with your INDEX finger.
+*   **Scroll**: (In Scroll Mode) Move hand Up/Down.
+*   **Switch Desktop**: Swipe hand quickly Left or Right.
 
-### Left Hand (The Commander)
-*   **Left Click**: Quick pinch (Thumb + Index).
-*   **Right Click**: Quick pinch (Thumb + Middle).
-*   **Drag & Drop**: Pinch and **hold** (Thumb + Index). Release to drop.
-*   **Toggle Scroll Mode**: Show the **"V" or "Peace" Sign** (Index + Middle fingers raised). Hold it for a second until the HUD border turns Orange.
+**Left Hand (The Commander):**
+*   **L-Click**: Pinch THUMB & INDEX.
+*   **R-Click**: Pinch THUMB & MIDDLE.
+*   **Drag**: Hold THUMB & INDEX pinch.
+*   **Mode Swap**: Show 'V' Sign (Index+Middle up).
+*   **Volume**: Pinch THUMB & PINKY and move hand Up/Down.
 
----
-**Note**: If your hands are misidentified (Left is Right), you can change `handedness_swap` to `true` in the `config.json` file.
+*(Note: In One-Handed mode, all these gestures are performed with the Right Hand).*

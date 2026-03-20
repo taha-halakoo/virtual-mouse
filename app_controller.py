@@ -4,15 +4,18 @@ import numpy as np
 import pyautogui
 import os
 import math
+import keyboard
 
 from ui_view import UIView
 from hand_tracker import HandTracker
 from gesture_recognizer import GestureRecognizer
 from mouse_controller import MouseController
+from one_euro_filter import OneEuroFilter
 
 class AppController:
     """
-    Orchestrates the Virtual Mouse v2.2 system with One/Two Handed modes.
+    Orchestrates the Virtual Mouse v3.0 system with True One-Euro Filtering,
+    Global Hotkeys, and advanced gesture dispatching.
     """
     def __init__(self):
         self.config = self.load_config()
@@ -26,12 +29,24 @@ class AppController:
         )
         self.mouse_controller = MouseController(self.screen_width, self.screen_height)
         
+        # Initialize True One-Euro Filters for X and Y coordinates
+        # mincutoff controls jitter (lower = less jitter), beta controls lag (higher = less lag at high speed)
+        smoothening = self.config['mouse'].get('smoothening', 5)
+        # Convert the abstract "smoothening 1-20" slider value into reasonable 1Euro parameters
+        # High smoothening -> lower cutoff
+        min_cutoff = max(0.01, 1.0 / smoothening)
+        beta = 0.5 # A good default for hand tracking
+        
+        self.filter_x = OneEuroFilter(mincutoff=min_cutoff, beta=beta)
+        self.filter_y = OneEuroFilter(mincutoff=min_cutoff, beta=beta)
+
         self.view = UIView(self)
         self.view.set_initial_settings(self.config)
 
         self._running = False
-        self.plocx, self.plocy = 0, 0
-        self.clocx, self.clocy = 0, 0
+        
+        # Setup Global Hotkey
+        keyboard.add_hotkey('ctrl+shift+m', self.toggle_tracking_hotkey)
 
     def load_config(self):
         if not os.path.exists('config.json'):
@@ -46,12 +61,27 @@ class AppController:
     def update_config(self, section, key, value):
         if section in self.config and key in self.config[section]:
             self.config[section][key] = value
+            
             # Live updates
             if key == 'control_mode':
                 self.gesture_recognizer.control_mode = value
+            elif key == 'smoothening':
+                min_cutoff = max(0.01, 1.0 / value)
+                self.filter_x.mincutoff = min_cutoff
+                self.filter_y.mincutoff = min_cutoff
             
             with open('config.json', 'w') as f:
                 json.dump(self.config, f, indent=2)
+
+    def toggle_tracking_hotkey(self):
+        """Called by the global keyboard hook."""
+        # Because this is called from a background thread, we must schedule UI updates safely
+        if self._running:
+            self.view.after(0, self.stop)
+            self.view.after(0, lambda: self.view.start_stop_button.configure(text="Start Tracking", bootstyle="success"))
+        else:
+            self.view.after(0, self.start)
+            self.view.after(0, lambda: self.view.start_stop_button.configure(text="Stop Tracking", bootstyle="danger"))
 
     def start(self):
         if self.hand_tracker is None:
@@ -62,6 +92,10 @@ class AppController:
         self._running = True
         self.hand_tracker.start()
         self.view.update_status("Running")
+        
+        # Reset filters on start
+        self.filter_x = OneEuroFilter(mincutoff=self.filter_x.mincutoff, beta=self.filter_x.beta)
+        self.filter_y = OneEuroFilter(mincutoff=self.filter_y.mincutoff, beta=self.filter_y.beta)
 
     def stop(self):
         self._running = False
@@ -98,26 +132,34 @@ class AppController:
             self.view.update_status("No Hands")
 
     def execute_action(self, action, args, frame_shape):
-        smoothening = self.config['mouse']['smoothening']
         sensitivity = self.config['mouse']['pointer_sensitivity']
+        mirror = self.config['mouse'].get('mirror_input', False)
 
         if action == 'move':
             x1, y1 = args
+            
+            # 1. Map to screen
             target_x = np.interp(x1, (50, frame_shape[1] - 50), (0, self.screen_width))
             target_y = np.interp(y1, (50, frame_shape[0] - 50), (0, self.screen_height))
             
+            if mirror:
+                target_x = self.screen_width - target_x
+
+            # 2. Sensitivity multiplier
             center_x, center_y = self.screen_width / 2, self.screen_height / 2
             target_x = center_x + (target_x - center_x) * sensitivity
             target_y = center_y + (target_y - center_y) * sensitivity
+            
+            # Clamp to screen bounds before filtering
+            target_x = max(0, min(self.screen_width, target_x))
+            target_y = max(0, min(self.screen_height, target_y))
 
-            dist = math.hypot(target_x - self.plocx, target_y - self.plocy)
-            dynamic_smooth = max(2, smoothening - (dist / 100))
+            # 3. Apply True One-Euro Filter
+            current_time = time.time()
+            smooth_x = self.filter_x(current_time, target_x)
+            smooth_y = self.filter_y(current_time, target_y)
             
-            self.clocx = self.plocx + (target_x - self.plocx) / dynamic_smooth
-            self.clocy = self.plocy + (target_y - self.plocy) / dynamic_smooth
-            
-            self.mouse_controller.move(self.clocx, self.clocy)
-            self.plocx, self.plocy = self.clocx, self.clocy
+            self.mouse_controller.move(smooth_x, smooth_y)
 
         elif action == 'left_click':
             self.mouse_controller.left_click()
@@ -131,6 +173,16 @@ class AppController:
             self.mouse_controller.scroll(args)
         elif action == 'set_mode':
             self.view.update_mode(args)
+        elif action == 'desktop_left':
+            pyautogui.hotkey('win', 'ctrl', 'left') # Windows specific, adjust for OS if needed
+            print("Action: Desktop Left")
+        elif action == 'desktop_right':
+            pyautogui.hotkey('win', 'ctrl', 'right')
+            print("Action: Desktop Right")
+        elif action == 'volume_up':
+            pyautogui.press('volumeup')
+        elif action == 'volume_down':
+            pyautogui.press('volumedown')
 
 if __name__ == "__main__":
     pass
