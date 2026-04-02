@@ -5,3 +5,9 @@ Pillow
 ttkbootstrap
 pystray
 keyboard
+pygetwindow
+pytesseract
+pygame
+pyaudio
+scipy
+pywin32
