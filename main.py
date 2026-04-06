@@ -6,7 +6,7 @@ def main():
     
     This function initializes the AppController, which in turn sets up
     the GUI (UIView) and all other components. The application's main
-    loop is then started via the view.
+    loop is then started via the view's mainloop.
     """
     try:
         app = AppController()
@@ -24,7 +24,6 @@ def main():
         messagebox.showerror("Application Error", f"""An unexpected error occurred: {e}
 Please check the console for details.""")
         root.destroy()
-
 
 if __name__ == "__main__":
     main()

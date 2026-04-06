@@ -3,6 +3,7 @@ import platform
 import math
 import time
 import threading
+import keyboard
 
 class MouseController:
     """
@@ -53,24 +54,23 @@ class MouseController:
     def set_sniper_mode(self, enabled):
         self.sniper_mode = enabled
 
-    def move(self, hand_x, hand_y):
+    def move_relative(self, dx, dy, hand_scale=0.1):
         current_time = time.time()
         dt = current_time - self.last_time
+        if dt == 0: dt = 0.001
         
-        if self.last_hand_x is None or dt == 0 or dt > 0.1:
-            self.last_hand_x = hand_x
-            self.last_hand_y = hand_y
-            self.last_time = current_time
-            self.sync_os_mouse()
-            return (0, 0)
-
-        dx = hand_x - self.last_hand_x
-        dy = hand_y - self.last_hand_y
+        self.last_time = current_time
         
         mouse_config = self.config.get('mouse', {})
-        
         if mouse_config.get('invert_x'): dx = -dx
         if mouse_config.get('invert_y'): dy = -dy
+
+        # Snap-to-grid (Shift)
+        if keyboard.is_pressed('shift'):
+            if abs(dx) > abs(dy):
+                dy = 0
+            else:
+                dx = 0
 
         sensitivity = mouse_config.get('pointer_sensitivity', 1.5)
         base_multiplier = sensitivity * 3.0 
@@ -80,41 +80,40 @@ class MouseController:
             
         velocity = math.hypot(dx, dy) / dt
         
-        # Feature 12: Context-Aware Acceleration (AI detects empty space vs text density)
-        # We simulate this dynamically by increasing acceleration if moving towards center, decreasing if near edges where windows usually are.
-        dist_to_center = math.hypot(self.current_screen_x - self.screen_width/2, self.current_screen_y - self.screen_height/2)
-        context_penalty = 1.0 if dist_to_center < self.screen_width*0.3 else 0.7 
-        
-        accel_factor = 1.0
-        if self.config.get('advanced', {}).get('neural_speed_mapping', True):
-            if velocity > 500 and not self.sniper_mode:
-                accel_factor = min(4.0, 1.0 + ((velocity - 500) / 800.0) ** 1.6)
+        # Dwell-to-click
+        if self.config.get('accessibility', {}).get('dwell_to_click', False):
+            if velocity < 15:
+                if not hasattr(self, 'dwell_start_time'):
+                    self.dwell_start_time = current_time
+                elif current_time - self.dwell_start_time > 1.2:
+                    self.left_click()
+                    self.dwell_start_time = current_time + 1.0 # cooldown
+            else:
+                if hasattr(self, 'dwell_start_time'):
+                    del self.dwell_start_time
 
-        screen_dx = dx * base_multiplier * accel_factor * context_penalty
-        screen_dy = dy * base_multiplier * accel_factor * context_penalty
+        # Dynamic acceleration curve
+        accel_factor = 1.0
+        if velocity > 50:
+            accel_factor = min(4.0, 1.0 + ((velocity - 50) / 500.0) ** 1.5)
+
+        # Z-Axis Depth Scaling
+        z_scale_factor = 1.0
+        if self.config.get('advanced', {}).get('z_axis_scaling', True) and hand_scale > 0.01:
+            z_scale_factor = 0.15 / hand_scale
+            z_scale_factor = max(0.5, min(z_scale_factor, 2.5))
+
+        screen_dx = dx * base_multiplier * accel_factor * z_scale_factor
+        screen_dy = dy * base_multiplier * accel_factor * z_scale_factor
         
-        # Feature 6: Skeletal Physics Engine Update
         target_vx = screen_dx / dt
         target_vy = screen_dy / dt
         
-        # Apply force = mass * acceleration -> v = v0 + (F/m)*t
         self.velocity_x = (self.velocity_x * self.friction) + (target_vx * (1.0 - self.friction) / self.mass)
         self.velocity_y = (self.velocity_y * self.friction) + (target_vy * (1.0 - self.friction) / self.mass)
 
-        # Feature 1: Predictive Cursor Routing (Snapping to UI elements)
-        # If moving extremely fast, predict trajectory and multiply force
-        if math.hypot(self.velocity_x, self.velocity_y) > 10000:
-             self.velocity_x *= 1.2
-             self.velocity_y *= 1.2
-
         physics_dx = self.velocity_x * dt
         physics_dy = self.velocity_y * dt
-
-        if math.hypot(physics_dx, physics_dy) > self.screen_width * 0.4:
-            self.last_hand_x = hand_x
-            self.last_hand_y = hand_y
-            self.last_time = current_time
-            return (0, 0)
 
         self.current_screen_x += physics_dx
         self.current_screen_y += physics_dy
@@ -122,24 +121,28 @@ class MouseController:
         self.current_screen_x = max(2, min(self.current_screen_x, self.screen_width - 2))
         self.current_screen_y = max(2, min(self.current_screen_y, self.screen_height - 2))
 
+        # Smooth Edge-Pan
+        if self.config.get('mouse', {}).get('smooth_edge_pan', True):
+            pan_speed = 12
+            if self.current_screen_y <= 5:
+                self.scroll(pan_speed)
+            elif self.current_screen_y >= self.screen_height - 5:
+                self.scroll(-pan_speed)
+
         try:
             pyautogui.moveTo(int(self.current_screen_x), int(self.current_screen_y))
         except pyautogui.FailSafeException:
             self.sync_os_mouse() 
-
-        self.last_hand_x = hand_x
-        self.last_hand_y = hand_y
-        self.last_time = current_time
-        
+            
         return (physics_dx, physics_dy)
 
     def pause_tracking(self):
         self.last_hand_x = None
         self.last_hand_y = None
-        # Let physics decay naturally
         self.velocity_x *= 0.5
         self.velocity_y *= 0.5
         self.scroll_velocity *= 0.5
+        self.sync_os_mouse() # Sync on pause to avoid drift
 
     def reset_acceleration(self):
         self.pause_tracking()

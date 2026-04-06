@@ -186,38 +186,46 @@ class AppController:
 
     def execute_action(self, action, args, frame_shape):
         if action == 'move':
-            x, y = args
+            x, y, scale = args
             current_time = time.time()
-            if self.config['advanced']['stress_relief_smoothing']:
-                t_prev = self.filter_x.t_prev if self.filter_x.t_prev is not None else current_time
-                dt = current_time - t_prev
-                if dt > 0:
-                    x_prev = self.filter_x.x_prev if self.filter_x.x_prev is not None else x
-                    y_prev = self.filter_y.x_prev if self.filter_y.x_prev is not None else y
-                    vel = math.hypot(x - x_prev, y - y_prev) / dt
-                    if vel > 2000:
-                        self.filter_x.beta = 0.01
-                        self.filter_y.beta = 0.01
-                    else:
-                        self.filter_x.beta = self.config['advanced']['one_euro_beta']
-                        self.filter_y.beta = self.config['advanced']['one_euro_beta']
+            
+            if self.last_raw_x is None:
+                self.last_raw_x = x
+                self.last_raw_y = y
+                return
+                
+            raw_dx = x - self.last_raw_x
+            raw_dy = y - self.last_raw_y
+            
+            self.last_raw_x = x
+            self.last_raw_y = y
 
-            smooth_x = self.filter_x(current_time, x)
-            smooth_y = self.filter_y(current_time, y)
-            self.mouse_controller.move(smooth_x, smooth_y)
+            # Outlier Rejection
+            t_prev = self.filter_x.t_prev if self.filter_x.t_prev is not None else current_time
+            dt = current_time - t_prev
+            if dt > 0:
+                vel = math.hypot(raw_dx, raw_dy) / dt
+                if vel > 10000: # impossibly high velocity, ignore
+                    return
+
+            smooth_dx = self.filter_x(current_time, raw_dx)
+            smooth_dy = self.filter_y(current_time, raw_dy)
+            self.mouse_controller.move_relative(smooth_dx, smooth_dy, scale)
 
         elif action == 'pause_tracking':
+            self.last_raw_x = None
+            self.last_raw_y = None
             self.mouse_controller.pause_tracking()
             self.filter_x.t_prev = None
             self.filter_y.t_prev = None
+            self.filter_x.x_prev = 0
+            self.filter_y.x_prev = 0
             
         elif action == 'precision_mode':
             self.mouse_controller.set_sniper_mode(args)
 
         elif action == 'left_click':
             self.mouse_controller.left_click()
-            if self.config['accessibility'].get('audio_spatial_feedback', False):
-                pass # Stereoscopic ping could be played here
 
         elif action == 'right_click':
             self.mouse_controller.right_click()
